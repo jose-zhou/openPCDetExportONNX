@@ -1,0 +1,18 @@
+data_list: /media/jose/6842930A30C05552/3Drecgonization/code/Transplantation_model/OpenPCDet_output_ONNX/tempTest/cvte02_20220105084640_livox_front_00102000.bin
+J note backbone2D input channel 20
+J note channel 64
+J note channel 128
+J note channel 256
+J note data_dict pointcloud (20012, 4)
+J note, backbone2d input feature shape torch.Size([1, 20, 200, 170])
+J note after conv_4 torch.Size([1, 256, 25, 21])
+J note, cat shape01 torch.Size([1, 256, 50, 42]) torch.Size([1, 128, 50, 42])
+J note: after backbone_2d feature shape is: torch.Size([1, 256, 50, 42])
+J note: CenterHead input feature map shape torch.Size([1, 256, 50, 42])
+J note data_dict keys torch.Size([1, 20, 200, 170])
+J note, backbone2d input feature shape torch.Size([1, 20, 200, 170])
+J note after conv_4 torch.Size([1, 256, 25, 21])
+J note, cat shape01 torch.Size([1, 256, 50, 42]) torch.Size([1, 128, 50, 42])
+J note: after backbone_2d feature shape is: torch.Size([1, 256, 50, 42])
+J note: CenterHead input feature map shape torch.Size([1, 256, 50, 42])
+per pointcloud predict time: 1.5434138774871826

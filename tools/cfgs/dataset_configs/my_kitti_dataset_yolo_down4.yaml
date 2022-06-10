@@ -1,0 +1,96 @@
+# 更改数据集处理类名称
+# DATASET: 'KittiDataset'
+DATASET: 'myKittiDataset_change_head'
+
+# 更改数据集数据文件路径
+# DATA_PATH: '../data/kitti'
+DATA_PATH: '../data/mykitti'
+
+# POINT_CLOUD_RANGE: [0, -40, -1, 68,40, 3]   #centerpoint data2voxel的参数
+POINT_CLOUD_RANGE: [0, -20, -1, 34,20, 3]  # 该yolo的数据参数
+DATA_SPLIT: {
+    'train': train,
+    'test': test
+}
+
+# 根据 DATA_PATH 路径  指定中间格式 数据  存储名称
+INFO_PATH: {
+    'train': [kitti_infos_train.pkl],
+    'test': [kitti_infos_test.pkl],
+}
+# 此参数作用未知
+GET_ITEM_LIST: ["points"]
+# 是否只是用FOV中的点云作训练
+# FOV_POINTS_ONLY: True
+FOV_POINTS_ONLY: False
+
+# 数据增强有关配置
+DATA_AUGMENTOR:
+    DISABLE_AUG_LIST: ['placeholder']
+    AUG_CONFIG_LIST:
+        # 此参数可能为 函数名  函数功能未知
+        - NAME: gt_sampling
+          # 此参数作用未知  是否使用路面平面
+          # USE_ROAD_PLANE: True
+          USE_ROAD_PLANE: False
+          DB_INFO_PATH:
+              - kitti_dbinfos_train.pkl
+          # 此参数作用未知
+          PREPARE: {
+            # 通过点数过滤
+            #  filter_by_min_points: ['Car:5', 'Pedestrian:5', 'Cyclist:5'],
+             filter_by_min_points: ['Car:5','Pedestrian:5', 'Cyclist:5', 'Van:5', 'Heavy_Truck:5', 'Light_Truck:5', 'Tricycle:5',  'Small_Bus:5',  'Big_Bus:5', 'Ying_Er_Che:5'],
+             
+          }
+
+          # 此参数作用未知
+          # SAMPLE_GROUPS: ['Car:20','Pedestrian:15', 'Cyclist:15']
+          SAMPLE_GROUPS: ['Car:5','Pedestrian:5', 'Cyclist:5', 'Van:5', 'Heavy_Truck:5', 'Light_Truck:5', 'Tricycle:5',  'Small_Bus:5',  'Big_Bus:5', 'Ying_Er_Che:5']
+          NUM_POINT_FEATURES: 4
+          # 此参数作用未知
+          DATABASE_WITH_FAKELIDAR: False
+          # 此参数作用未知
+          REMOVE_EXTRA_WIDTH: [0.0, 0.0, 0.0]
+          # 此参数作用未知
+          LIMIT_WHOLE_SCENE: True
+
+        # 下边几个参数可能为 函数名  函数功能：实现目标点云的flip rotate scale
+        - NAME: random_world_flip
+          ALONG_AXIS_LIST: ['x']
+
+        - NAME: random_world_rotation
+          WORLD_ROT_ANGLE: [-0.78539816, 0.78539816]
+
+        - NAME: random_world_scaling
+          WORLD_SCALE_RANGE: [0.95, 1.05]
+
+# 此参数作用未知  直译为  点特征编码？
+POINT_FEATURE_ENCODING: {
+    encoding_type: absolute_coordinates_encoding,
+    used_feature_list: ['x', 'y', 'z', 'intensity'],
+    src_feature_list: ['x', 'y', 'z', 'intensity'],
+}
+
+# 此参数为对数据作处理  具体处理内容 对应下边函数名
+DATA_PROCESSOR:
+    # 此函数 作用未知
+    - NAME: mask_points_and_boxes_outside_range
+      REMOVE_OUTSIDE_BOXES: True
+
+    # 此参数 打乱 点云？
+    - NAME: shuffle_points
+      SHUFFLE_ENABLED: {
+        'train': True,
+        'test': False
+      }
+
+    - NAME: transform_points_to_voxels
+      # voxel的长宽高 单位为m
+      VOXEL_SIZE: [0.2, 0.2, 0.2]
+      # voxel中最多采样留下的点个数
+      MAX_POINTS_PER_VOXEL: 5
+      # 最多保留voxel的个数
+      MAX_NUMBER_OF_VOXELS: {
+        'train': 16000,
+        'test': 40000
+      }
