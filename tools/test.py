@@ -94,6 +94,7 @@ def repeat_eval_ckpt(model, test_loader, args, eval_output_dir, logger, ckpt_dir
     '''
     # evaluated ckpt record
     ckpt_record_file = eval_output_dir / ('eval_list_%s.txt' % cfg.DATA_CONFIG.DATA_SPLIT['test'])
+    print('J note ckpt_record_file', ckpt_record_file)
     with open(ckpt_record_file, 'a'):
         pass
 

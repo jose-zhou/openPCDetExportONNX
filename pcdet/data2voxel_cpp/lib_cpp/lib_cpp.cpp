@@ -514,14 +514,14 @@ float DX, float DY, float DZ, float overlap)
     if (Y > Y_MIN && Y < Y_MAX && X >X_MIN && X < X_MAX && Z > Z_MIN && Z < Z_MAX)
     {
       // int channel = (int) ((-Z + Z_MAX)/DZ);
-      int channel = (int) ((Z + Z_MIN)/DZ);
-      if(fabs(X) < 3 && fabs(Y) < 3)
+      int channel = (int) ((Z - Z_MIN)/DZ);
+      // if(fabs(X) < 3 && fabs(Y) < 3)
+      // {
+      //   continue;
+      // }
+      // // if(X > -overlap)
       {
-        continue;
-      }
-      if(X > -overlap)
-      {
-        int pixel_x = (int) ((X - X_MIN + 2*overlap)/DX);
+        int pixel_x = (int) ((X - X_MIN)/DX);
         int pixel_y = (int) ((Y - Y_MIN)/DY);
         // int pixel_y = (int) ((-Y + Y_MAX)/DY);
         ptr_data[pixel_x*WIDTH*CHANNELS + pixel_y*CHANNELS + channel] = 1;

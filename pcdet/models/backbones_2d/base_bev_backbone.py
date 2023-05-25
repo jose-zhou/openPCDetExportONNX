@@ -88,8 +88,7 @@ class BaseBEVBackbone(nn.Module):
                 spatial_features
         Returns:
         """
-        print('J note, backbone2d input feature shape', data_dict.shape)
-        spatial_features = data_dict
+        spatial_features = data_dict['spatial_features']
         # 统计1的个数 和 > 0的个数
         # print(np.sum(spatial_features.cpu().numpy().flatten() > -1))
         # print(np.sum(spatial_features.cpu().numpy().flatten() == 1))
@@ -117,10 +116,10 @@ class BaseBEVBackbone(nn.Module):
         if len(self.deblocks) > len(self.blocks):
             x = self.deblocks[-1](x)
 
-        # data_dict['spatial_features_2d'] = x
-        print('J note: after backbone_2d feature shape is:',  x.shape)
+        data_dict['spatial_features_2d'] = x
+        # print('J note: after backbone_2d feature shape is:',  x.shape)
 
-        return x
+        return data_dict
 
     def test(self):
         print('testtest!!!!!!')
@@ -147,7 +146,7 @@ class res_imitateyolo(nn.Module):
         
 
     def res_bloc(self, channel):
-        print('J note channel', channel)
+        # print('J note channel', channel)
         res = nn.Sequential(
             nn.Conv2d( int(channel), int(channel/2), kernel_size=1),
             nn.BatchNorm2d(int(channel/2)),
@@ -302,7 +301,6 @@ class ImitateYoloBackbone(nn.Module):
                 spatial_features
         Returns:
         """
-        print('J note, backbone2d input feature shape', data_dict.shape)
         spatial_features = data_dict
         # 64 scale = 1
         x = self.conv1(spatial_features)
@@ -325,12 +323,12 @@ class ImitateYoloBackbone(nn.Module):
         x = self.conv_3(x)
         # 256 scale = 1/8
         x = self.conv_4(x)
-        print('J note after conv_4', x.shape)
+        # print('J note after conv_4', x.shape)
         
         # 256 scale = 1/4
         x = self.deConv(x)
         # 512 scale = 1/8
-        print('J note, cat shape01', x.shape, res_1_part_4.shape)
+        # print('J note, cat shape01', x.shape, res_1_part_4.shape)
         x = torch.cat((x, res_1_part_4), dim=1)
 
         # 256 scale = 1/8
@@ -345,6 +343,6 @@ class ImitateYoloBackbone(nn.Module):
         # x  =self.conv_9(x)
 
         # data_dict['spatial_features_2d'] = x
-        print('J note: after backbone_2d feature shape is:',  x.shape)
+        # print('J note: after backbone_2d feature shape is:',  x.shape)
 
         return x

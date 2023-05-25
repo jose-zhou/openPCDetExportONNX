@@ -52,7 +52,10 @@ class KittiDataset(DatasetTemplate):
         self.kitti_infos = []
         self.include_kitti_data(self.mode)
         self.point_range = self.dataset_cfg['POINT_CLOUD_RANGE']
+        print('self.point_range = self.dataset_cfg[POINT_CLOUD_RANGE]', self.point_range)
         self.voxel_size =  self.dataset_cfg['DATA_PROCESSOR'][2]['VOXEL_SIZE']
+        self.frame_number = 0
+        self.total_time = 0
 
     def include_kitti_data(self, mode):
         '''
@@ -99,7 +102,7 @@ class KittiDataset(DatasetTemplate):
         lidar_file = self.root_split_path / 'velodyne' / ('%s.bin' % idx)
         
         assert lidar_file.exists()
-        return np.fromfile(str(lidar_file), dtype=np.float32).reshape(-1, 4)
+        return np.fromfile(str(lidar_file), dtype=np.float32).reshape(-1, 8)[:, 0:4]
 
     
 
@@ -110,7 +113,7 @@ class KittiDataset(DatasetTemplate):
                  input: idx  标注文件文件名
                  returm: 
         '''
-        label_file = self.root_split_path / 'label' / ('%s.txt' % idx)
+        label_file = self.root_split_path / 'label_2' / ('%s.txt' % idx)
 
         if not os.path.exists(label_file):
             print('Debug: 文件不存在', label_file)
@@ -467,7 +470,7 @@ class KittiDataset(DatasetTemplate):
             return None, {}
 
         from .kitti_object_eval_python import my_eval as kitti_eval
-        # from .kitti_object_eval_python import eval_park as kitti_eval
+        from .kitti_object_eval_python import eval_park as kitti_eval
 
         eval_det_annos = copy.deepcopy(det_annos)
         eval_gt_annos = [copy.deepcopy(info['annos']) for info in self.kitti_infos]
@@ -481,6 +484,7 @@ class KittiDataset(DatasetTemplate):
 
         return len(self.kitti_infos)
 
+    
     def __getitem__(self, index):
         '''
             function:  自建数据集类别的dataloader  在运行迭代器时  调用该函数取出数据
@@ -532,7 +536,7 @@ class KittiDataset(DatasetTemplate):
             input_dict['points'] = points
 
         # if "images" in get_item_list:
-        #     input_dict['images'] = self.get_image(sample_idx)
+            # input_dict['images'] = self.get_image(sample_idx)
 
         # if "depth_maps" in get_item_list:
         #     input_dict['depth_maps'] = self.get_depth_map(sample_idx)
@@ -551,14 +555,14 @@ class KittiDataset(DatasetTemplate):
         spatial_features = lib_cpp.data2voxel(data_dict['points'], HEIGHT, WIDTH, CHANNELS,self.point_range[0], self.point_range[1], 
         self.point_range[2], self.point_range[3],  self.point_range[4], self.point_range[5], self.voxel_size[0], self.voxel_size[1], self.voxel_size[2], 0)
         
-        print('J note: spatial_features shape is', spatial_features.shape)
+        # print('J note: spatial_features shape is', spatial_features.shape)
         # print('voxel de size is ', self.voxel_size)
         # print('point_range is', self.point_range)
         # print('spatial_features shape is', spatial_features.transpose((2, 1, 0)).shape)
         # data_dict['spatial_features' ] = spatial_features.transpose((2, 1, 0))
         # [channel, w, h]
         data_dict['spatial_features' ] = spatial_features.transpose((2, 1, 0))
-        print('J note:np.unique(spatial_features)', np.unique(spatial_features))
+        # print('J note:np.unique(spatial_features)', np.unique(spatial_features))   #查看numpy中的元素
         # print(np.sum(spatial_features.flatten() > 0))
         # print('!!!!!!!!!!!!!!!!')
 
@@ -640,7 +644,8 @@ if __name__ == '__main__':
         ROOT_DIR = (Path(__file__).resolve().parent / '../../../').resolve()
         create_kitti_infos(
             dataset_cfg=dataset_cfg,
-            class_names=['Car', 'Pedestrian', 'Cyclist',  'Van', 'Heavy_Truck', 'Light_Truck', 'Tricycle',  'Small_Bus',  'Big_Bus', 'Ying_Er_Che'],
+            # class_names=['Car', 'Pedestrian', 'Cyclist',  'Van', 'Heavy_Truck', 'Light_Truck', 'Tricycle',  'Small_Bus',  'Big_Bus', 'Ying_Er_Che'],
+            class_names=['Car', 'Pedestrian', 'Cyclist'],
             data_path=ROOT_DIR / 'data' / 'mykitti',
             save_path=ROOT_DIR / 'data' / 'mykitti'
         )

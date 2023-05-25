@@ -62,7 +62,7 @@ class CenterHead(nn.Module):
         self.grid_size = grid_size
         self.point_cloud_range = point_cloud_range
         self.voxel_size = voxel_size
-        # 这个是不是编解码用的, 是的 !!!!!!!!!!!!!!!!!!!1
+        # 这是编码用的
         self.feature_map_stride = self.model_cfg.TARGET_ASSIGNER_CONFIG.get('FEATURE_MAP_STRIDE', None)
 
         self.class_names = class_names
@@ -128,13 +128,19 @@ class CenterHead(nn.Module):
         Returns:
 
         """
-        #    heatmap size [10, 300, 250]
+        #gt_box shape  [19, 8]]
+        #  
+
+        # heatmap size [10, 200, 180]
         heatmap = gt_boxes.new_zeros(num_classes, feature_map_size[1], feature_map_size[0])
-        print('J note: heatmap input paramters:', heatmap.shape)
-        # [500, 8]
+        # print('J note assign target input gt_box shape is', gt_boxes.shape) 
+
+        # print('J note: assign target heatmap resolution is:', heatmap.shape)
+        
+        # ret_boxes shape is  [500, 8]
         ret_boxes = gt_boxes.new_zeros((num_max_objs, gt_boxes.shape[-1] - 1 + 1))
-        # print('J note: ret_boxes.shape', ret_boxes.shape)
-        inds = gt_boxes.new_zeros(num_max_objs).long()
+
+        inds   = gt_boxes.new_zeros(num_max_objs).long()
         mask = gt_boxes.new_zeros(num_max_objs).long()
 
         x, y, z = gt_boxes[:, 0], gt_boxes[:, 1], gt_boxes[:, 2]
@@ -153,9 +159,11 @@ class CenterHead(nn.Module):
         dx = dx / self.voxel_size[0] / feature_map_stride
         dy = dy / self.voxel_size[1] / feature_map_stride
 
+        # 由目标框影射到featuremap后的dx dy来计算生成heatmap时的gaussian radius
         radius = centernet_utils.gaussian_radius(dx, dy, min_overlap=gaussian_overlap)
         radius = torch.clamp_min(radius.int(), min=min_radius)
 
+        # 对每个目标框做操作
         for k in range(min(num_max_objs, gt_boxes.shape[0])):
             if dx[k] <= 0 or dy[k] <= 0:
                 continue
@@ -163,6 +171,7 @@ class CenterHead(nn.Module):
             if not (0 <= center_int[k][0] <= feature_map_size[0] and 0 <= center_int[k][1] <= feature_map_size[1]):
                 continue
 
+            # 目标框类别ID
             cur_class_id = (gt_boxes[k, -1] - 1).long()
             centernet_utils.draw_gaussian_to_heatmap(heatmap[cur_class_id], center[k], radius[k].item())
 
@@ -196,7 +205,7 @@ class CenterHead(nn.Module):
         """
         # print('J note feature_map_size input is', feature_map_size)
         # 这里进行了以此翻转  不知道为什么要翻转
-        feature_map_size = feature_map_size[::-1]  # [H, W] ==> [x, y]    [300, 200] ==> [200, 300]
+        feature_map_size = feature_map_size[::-1]  # [H, W] ==> [x, y]    [200, 180] ==> [180, 200]
         # print('J note feature_map_size input change', feature_map_size)
         target_assigner_cfg = self.model_cfg.TARGET_ASSIGNER_CONFIG
         # feature_map_size = self.grid_size[:2] // target_assigner_cfg.FEATURE_MAP_STRIDE
@@ -284,7 +293,7 @@ class CenterHead(nn.Module):
             loc_loss = loc_loss * self.model_cfg.LOSS_CONFIG.LOSS_WEIGHTS['loc_weight']
 
             loss += hm_loss + loc_loss
-            print('J note hm_loss and loc_loss', hm_loss, loc_loss)
+            # print('J note hm_loss and loc_loss', hm_loss, loc_loss)
             tb_dict['hm_loss_head_%d' % idx] = hm_loss.item()
             tb_dict['loc_loss_head_%d' % idx] = loc_loss.item()
 
@@ -292,22 +301,34 @@ class CenterHead(nn.Module):
         return loss, tb_dict
 
     def generate_predicted_boxes(self, batch_size, pred_dicts):
+        # 获取后处理参数
         post_process_cfg = self.model_cfg.POST_PROCESSING
+        print('post_process_cfg.POST_CENTER_LIMIT_RANGE', post_process_cfg.POST_CENTER_LIMIT_RANGE)
+        # 中心点的限制范围[0, -20, -1, 36, 20, 3]
         post_center_limit_range = torch.tensor(post_process_cfg.POST_CENTER_LIMIT_RANGE).cuda().float()
 
+        # 以batchsize 1 为例  
         ret_dict = [{
             'pred_boxes': [],
             'pred_scores': [],
             'pred_labels': [],
         } for k in range(batch_size)]
+        
         for idx, pred_dict in enumerate(pred_dicts):
-            batch_hm = pred_dict['hm'].sigmoid()
+            batch_hm = pred_dict['hm']
             batch_center = pred_dict['center']
             batch_center_z = pred_dict['center_z']
+            # print('J temp batch_center_z', batch_center_z.shape)
+            # assign target时 lwh 取了 log
             batch_dim = pred_dict['dim'].exp()
             batch_rot_cos = pred_dict['rot'][:, 0].unsqueeze(dim=1)
+            # print('J temp batch_rot_cos', batch_rot_cos.shape)
             batch_rot_sin = pred_dict['rot'][:, 1].unsqueeze(dim=1)
+
+            # 当前模型不执行
             batch_vel = pred_dict['vel'] if 'vel' in self.separate_head_cfg.HEAD_ORDER else None
+
+            print('J note post progress pointCloud range is', self.point_cloud_range)
 
             final_pred_dicts = centernet_utils.decode_bbox_from_heatmap(
                 heatmap=batch_hm, rot_cos=batch_rot_cos, rot_sin=batch_rot_sin,
@@ -315,13 +336,18 @@ class CenterHead(nn.Module):
                 point_cloud_range=self.point_cloud_range, voxel_size=self.voxel_size,
                 feature_map_stride=self.feature_map_stride,
                 K=post_process_cfg.MAX_OBJ_PER_SAMPLE,
-                circle_nms=(post_process_cfg.NMS_CONFIG.NMS_TYPE == 'circle_nms'),
+                circle_nms=(post_process_cfg.NMS_CONFIG.NMS_TYPE == 'circle_nms'),  #false
                 score_thresh=post_process_cfg.SCORE_THRESH,
                 post_center_limit_range=post_center_limit_range
             )
+            # print('J note final_pred_dicts', len(final_pred_dicts))
 
             for k, final_dict in enumerate(final_pred_dicts):
+                # 没啥用应该是筛选预测类别中的label的
                 final_dict['pred_labels'] = self.class_id_mapping_each_head[idx][final_dict['pred_labels'].long()]
+                
+                
+                # 如果没做非极大值抑制  就做一个非极大值抑制
                 if post_process_cfg.NMS_CONFIG.NMS_TYPE != 'circle_nms':
                     selected, selected_scores = model_nms_utils.class_agnostic_nms(
                         box_scores=final_dict['pred_scores'], box_preds=final_dict['pred_boxes'],
@@ -362,26 +388,31 @@ class CenterHead(nn.Module):
             roi_labels[bs_idx, :num_boxes] = pred_dicts[bs_idx]['pred_labels']
         return rois, roi_scores, roi_labels
 
-    def forward(self, spatial_features_2d):
-        # spatial_features_2d.shape is : [2, 512, 300, 200]
-        # spatial_features_2d,  _= arg
-        print('J note: CenterHead input feature map shape', spatial_features_2d.shape)
-        # 经过共享卷积层后  尺寸变为 [2, 64, 300, 200]
+    def forward(self, data_dict):
+        # spatial_features_2d.shape is : 
+        # spatial_features_2d = data_dict['spatial_features_2d']
+        spatial_features_2d = data_dict
+        # print('J note: CenterHead input feature map shape', spatial_features_2d.shape)
+        # 经过共享卷积层后  尺寸变为 [1, , , ]
         x = self.shared_conv(spatial_features_2d)
         # print('J note: after share cov  shape is', x.shape)
         
 
         #  预测结果存在这里边   有哪些结果?    如下记录
-        #  1 预测了 center                   (x, y)                [2, 2, 300, 200]
-        #  2 预测了 center_Z                 (z)                   [2, 1, 300, 200]
-        #  4 预测了 dim                      (Dx, Dy, Dz)          [2, 3, 300, 200]
-        #  5 预测了 rot                      (          )          [2, 2, 300, 200]
-        #  6 预测了 hm(heat map?)            (10个类别)             [2, 10, 300, 200]
+        #  1 预测了 center                      (x, y)              [1, 2, 300, 200]
+        #  2 预测了 center_Z                    (z)                 [1, 1, 300, 200]
+        #  4 预测了 dim                         (Dx, Dy, Dz)        [1, 3, 300, 200]
+        #  5 预测了 rot                         ()                  [1, 2, 300, 200]
+        #  6 预测了 hm(heat map?)     (10个类别)                     [1, 10, 300, 200]
         pred_dicts = []
         # separateHead只有一个头
         for head in self.heads_list:
             pred_dicts.append(head(x))
 
+        # print('J note: predict result shape', len(pred_dicts))  1 
+        # for inde in pred_dicts:
+        #     for sds in inde.values():
+        #         print(sds.shape)
         # if self.training:
         #     # print('J note:  should be None', data_dict.get('spatial_features_2d_strides', None))   None
         #     # feature_map_size  is [150, 250]  就是feature_map输入的高和宽
@@ -393,13 +424,24 @@ class CenterHead(nn.Module):
         #     )
         #     self.forward_ret_dict['target_dicts'] = target_dict
 
+        # self.forward_ret_dict['pred_dicts'] = pred_dicts
+        # print('J note type!!!', target_dict.keys())
+        # print('J note ai!!!!!!!', pred_dicts[0].keys())
 
+        # 查看解码后的数据
+        # target_decode = self.generate_predicted_boxes(
+        #         data_dict['batch_size'], target_dict
+        #     )
+        # print('J data annotate',  data_dict['gt_boxes'])
+        # print('J data target_decode', target_decode)
+
+        # print('J note pred_dicts size is', pred_dicts[0].keys())
         result = []
         for idx, pred_dict in enumerate(pred_dicts):
-            batch_hm = pred_dict['hm'].sigmoid()
+            batch_hm = pred_dict['hm']
             batch_center = pred_dict['center']
             batch_center_z = pred_dict['center_z']
-            batch_dim = pred_dict['dim'].exp()
+            batch_dim = pred_dict['dim']
             batch_rot_cos = pred_dict['rot'][:, 0].unsqueeze(dim=1)
             batch_rot_sin = pred_dict['rot'][:, 1].unsqueeze(dim=1)
             
@@ -411,26 +453,3 @@ class CenterHead(nn.Module):
             result.append(batch_rot_sin)
         # 导出onnx时直接返回
         return result
-
-
-        data_dict = {}
-        data_dict['batch_size'] = 1
-        # print('J note type pred_dicts[0]', type(pred_dicts))
-        if not self.training or self.predict_boxes_when_training:
-            # 训练阶段不运行
-            pred_dicts = self.generate_predicted_boxes(
-                1, pred_dicts
-            )
-
-            # print('J note: should be False:', self.predict_boxes_when_training)   False
-            if self.predict_boxes_when_training:
-                rois, roi_scores, roi_labels = self.reorder_rois_for_refining(data_dict['batch_size'], pred_dicts)
-                data_dict['rois'] = rois
-                data_dict['roi_scores'] = roi_scores
-                data_dict['roi_labels'] = roi_labels
-                data_dict['has_class_labels'] = True
-            else:
-                data_dict['final_box_dicts'] = pred_dicts
-
-        # 预测结果以及GT编码后的target分别放在了 self.forward_ret_dict['target_dicts']  和self.forward_ret_dict['pred_dicts']中
-        return data_dict

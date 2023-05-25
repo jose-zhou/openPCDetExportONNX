@@ -1,6 +1,6 @@
-# CLASS_NAMES: ['Vehicle', 'Pedestrian', 'Cyclist']
+CLASS_NAMES: ['Car', 'Pedestrian', 'Cyclist']
 # 模型所需检测的类型
-CLASS_NAMES: ['Car', 'Pedestrian', 'Cyclist',  'Van', 'Heavy_Truck', 'Light_Truck',  'Tricycle',  'Small_Bus',  'Big_Bus', 'Ying_Er_Che']
+# CLASS_NAMES: ['Car', 'Pedestrian', 'Cyclist',  'Van', 'Heavy_Truck', 'Light_Truck',  'Tricycle',  'Small_Bus',  'Big_Bus', 'Ying_Er_Che']
 
 
 DATA_CONFIG:
@@ -40,8 +40,8 @@ MODEL:
         CLASS_AGNOSTIC: False
 
         CLASS_NAMES_EACH_HEAD: [
-            # ['Vehicle', 'Pedestrian', 'Cyclist']
-            ['Car', 'Pedestrian', 'Cyclist',  'Van', 'Heavy_Truck', 'Light_Truck',  'Tricycle',  'Small_Bus',  'Big_Bus', 'Ying_Er_Che']
+            ['Car', 'Pedestrian', 'Cyclist']
+            # ['Car', 'Pedestrian', 'Cyclist',  'Van', 'Heavy_Truck', 'Light_Truck',  'Tricycle',  'Small_Bus',  'Big_Bus', 'Ying_Er_Che']
         ]
 
         SHARED_CONV_CHANNEL: 64
@@ -71,12 +71,12 @@ MODEL:
             }
 
         POST_PROCESSING:
-            SCORE_THRESH: 0.4
-            POST_CENTER_LIMIT_RANGE:  [0, -20, -1, 34,20, 3] 
+            SCORE_THRESH: 0.45
+            POST_CENTER_LIMIT_RANGE: [-75.2, -75.2, -2, 75.2, 75.2, 4]
             MAX_OBJ_PER_SAMPLE: 100
             NMS_CONFIG:
                 NMS_TYPE: nms_gpu
-                NMS_THRESH: 0.3
+                NMS_THRESH: 0.1
                 NMS_PRE_MAXSIZE: 4096
                 NMS_POST_MAXSIZE: 100
 
@@ -87,7 +87,7 @@ MODEL:
 
 
 OPTIMIZATION:
-    BATCH_SIZE_PER_GPU: 2
+    BATCH_SIZE_PER_GPU: 4
     NUM_EPOCHS: 80
 
     OPTIMIZER: adam_onecycle

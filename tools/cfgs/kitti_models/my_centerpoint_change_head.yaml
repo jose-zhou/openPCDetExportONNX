@@ -67,7 +67,7 @@ MODEL:
 
         POST_PROCESSING:
             SCORE_THRESH: 0.4
-            POST_CENTER_LIMIT_RANGE: [0, -20, -1, 34,20, 3] 
+            POST_CENTER_LIMIT_RANGE: [0, -20, -1, 36, 20, 3]
             MAX_OBJ_PER_SAMPLE: 100
             NMS_CONFIG:
                 NMS_TYPE: nms_gpu

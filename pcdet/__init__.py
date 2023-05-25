@@ -1,5 +1,7 @@
 import subprocess
 from pathlib import Path
+# import sys
+# print(sys.path)
 
 from .version import __version__
 

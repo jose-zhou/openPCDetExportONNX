@@ -1,5 +1,6 @@
 # This file is modified from https://github.com/tianweiy/CenterPoint
 
+from turtle import shape
 import torch
 import torch.nn.functional as F
 import numpy as np
@@ -52,8 +53,11 @@ def draw_gaussian_to_heatmap(heatmap, center, radius, k=1, valid_mask=None):
 
     height, width = heatmap.shape[0:2]
 
-    left, right = min(x, radius), min(width - x, radius + 1)
+    
+
+    left, right  =     min(x, radius), min(width - x, radius + 1)
     top, bottom = min(y, radius), min(height - y, radius + 1)
+    # print('J note draw Gaussian', x, y, radius, left, right, top, bottom)
 
     masked_heatmap = heatmap[y - top:y + bottom, x - left:x + right]
     masked_gaussian = torch.from_numpy(
@@ -116,9 +120,13 @@ def _circle_nms(boxes, min_radius, post_max_size=83):
 
 
 def _gather_feat(feat, ind, mask=None):
+    # print('J note feat size is', feat.shape, ind.unsqueeze(2).shape)
     dim = feat.size(2)
     ind = ind.unsqueeze(2).expand(ind.size(0), ind.size(1), dim)
+    # print('J note ind shape is ', ind.shape)
+    # https://blog.csdn.net/leviopku/article/details/108735704
     feat = feat.gather(1, ind)
+    # print('J note feat shape is ', feat.shape)
     if mask is not None:
         mask = mask.unsqueeze(2).expand_as(feat)
         feat = feat[mask]
@@ -127,8 +135,15 @@ def _gather_feat(feat, ind, mask=None):
 
 
 def _transpose_and_gather_feat(feat, ind):
+    '''
+        ind(in): shape is [b k]
+    '''
+    # https://zhuanlan.zhihu.com/p/64376950
+    # [b c h w] => [b h w c]
     feat = feat.permute(0, 2, 3, 1).contiguous()
+    # [b h w c] => [b h*w c]
     feat = feat.view(feat.size(0), -1, feat.size(3))
+    # [b h*w c] => [b k c]
     feat = _gather_feat(feat, ind)
     return feat
 
@@ -136,9 +151,15 @@ def _transpose_and_gather_feat(feat, ind):
 def _topk(scores, K=40):
     batch, num_class, height, width = scores.size()
 
-    topk_scores, topk_inds = torch.topk(scores.flatten(2, 3), K)
+    # print('J note scores.flatten(2, 3) shaoe is', scores.flatten(2, 3).shape, scores.shape)
 
+    #  b  c h w  > b c h*w        topk_inds     ===>   1, 10, K   每个类别上的前一百得分index
+    topk_scores, topk_inds = torch.topk(scores.flatten(2, 3), K)
+    # print('J note topk_inds is a 3 dim data?', topk_inds[0][0][:])
+
+    # 这一步等同于  topk_inds = topk_inds
     topk_inds = topk_inds % (height * width)
+    # print('J !!!!', topk_inds[0][0][:])
     topk_ys = (topk_inds // width).float()
     topk_xs = (topk_inds % width).int().float()
 
@@ -161,13 +182,17 @@ def decode_bbox_from_heatmap(heatmap, rot_cos, rot_sin, center, center_z, dim,
         assert False, 'not checked yet'
         heatmap = _nms(heatmap)
 
+    # 1  获取top_k的  得分   index(h * w)  class_id(0-9) 以及ys(0 - h) 和 xs(0 - w)
     scores, inds, class_ids, ys, xs = _topk(heatmap, K=K)
-    center = _transpose_and_gather_feat(center, inds).view(batch_size, K, 2)
-    rot_sin = _transpose_and_gather_feat(rot_sin, inds).view(batch_size, K, 1)
+    
+    # 2 获取top_k的  center rot_sin rot_cos center_z 以及dim
+    center = _transpose_and_gather_feat(center, inds).view(batch_size, K, 2) # [b k 2]
+    rot_sin = _transpose_and_gather_feat(rot_sin, inds).view(batch_size, K, 1) #
     rot_cos = _transpose_and_gather_feat(rot_cos, inds).view(batch_size, K, 1)
     center_z = _transpose_and_gather_feat(center_z, inds).view(batch_size, K, 1)
     dim = _transpose_and_gather_feat(dim, inds).view(batch_size, K, 3)
 
+    # 3 依据取出来的前K个得分的信息  计算这些预测结果3DBox的 朝向 center值 长宽高  
     angle = torch.atan2(rot_sin, rot_cos)
     xs = xs.view(batch_size, K, 1) + center[:, :, 0:1]
     ys = ys.view(batch_size, K, 1) + center[:, :, 1:2]
@@ -175,6 +200,7 @@ def decode_bbox_from_heatmap(heatmap, rot_cos, rot_sin, center, center_z, dim,
     xs = xs * feature_map_stride * voxel_size[0] + point_cloud_range[0]
     ys = ys * feature_map_stride * voxel_size[1] + point_cloud_range[1]
 
+    # 其中dim 为 dx dy dz
     box_part_list = [xs, ys, center_z, dim, angle]
     if vel is not None:
         vel = _transpose_and_gather_feat(vel, inds).view(batch_size, K, 2)
@@ -184,12 +210,17 @@ def decode_bbox_from_heatmap(heatmap, rot_cos, rot_sin, center, center_z, dim,
     final_scores = scores.view(batch_size, K)
     final_class_ids = class_ids.view(batch_size, K)
 
+    # 3 根据检测范围 筛选出预测框
     assert post_center_limit_range is not None
+    # https://runebook.dev/zh-CN/docs/pytorch/generated/torch.all
     mask = (final_box_preds[..., :3] >= post_center_limit_range[:3]).all(2)
     mask &= (final_box_preds[..., :3] <= post_center_limit_range[3:]).all(2)
 
+    # 的分阈值筛选
     if score_thresh is not None:
         mask &= (final_scores > score_thresh)
+
+    print('Jnote', final_box_preds.shape)
 
     ret_pred_dicts = []
     for k in range(batch_size):

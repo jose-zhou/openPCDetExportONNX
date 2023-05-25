@@ -21,5 +21,5 @@ $ make
 ```
 4. copy the `lib_cpp.so` to root directory:
 ```bash
-$ cp lib_cpp.so ../../../
+$ cp lib_cpp.so ../../
 ```

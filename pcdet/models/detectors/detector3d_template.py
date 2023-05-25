@@ -34,6 +34,7 @@ class Detector3DTemplate(nn.Module):
         self.global_step += 1
 
     def build_networks(self):
+        print('in build', self.dataset.point_cloud_range)
         model_info_dict = {
             'module_list': [],
             'num_rawpoint_features': self.dataset.point_feature_encoder.num_point_features,
@@ -101,6 +102,10 @@ class Detector3DTemplate(nn.Module):
     def build_backbone_2d(self, model_info_dict):
         if self.model_cfg.get('BACKBONE_2D', None) is None:
             return None, model_info_dict
+
+        # print('J note model_info_dict[num_bev_features] is:: ', model_info_dict['num_bev_features'])
+        # if not ('num_bev_features' in model_info_dict.keys()):
+        #     model_info_dict['num_bev_features'] = self.model_cfg['num_bev_features']
             
         backbone_2d_module = backbones_2d.__all__[self.model_cfg.BACKBONE_2D.NAME](
             model_cfg=self.model_cfg.BACKBONE_2D,
